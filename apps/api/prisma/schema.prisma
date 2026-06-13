@@ -35,11 +35,12 @@ model Project {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  owner       User            @relation("ProjectOwner", fields: [ownerId], references: [id])
-  members     ProjectMember[]
-  tasks       Task[]
-  reviewRuns  ReviewRun[]
-  digestRuns  DigestRun[]
+  owner        User            @relation("ProjectOwner", fields: [ownerId], references: [id])
+  members      ProjectMember[]
+  tasks        Task[]
+  reviewRuns   ReviewRun[]
+  digestRuns   DigestRun[]
+  chatMessages ChatMessage[]
 
   @@map("projects")
 }
@@ -188,4 +189,22 @@ enum DigestStatus {
   PENDING
   SENT
   FAILED
+}
+
+model ChatMessage {
+  id        String   @id @default(uuid())
+  projectId String
+  role      ChatRole
+  content   String
+  createdAt DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, createdAt])
+  @@map("chat_messages")
+}
+
+enum ChatRole {
+  USER
+  ASSISTANT
 }
