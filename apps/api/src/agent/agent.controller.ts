@@ -2,20 +2,29 @@ import {
   Body,
   Controller,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   Post,
   Sse,
   UseGuards,
 } from '@nestjs/common';
-import { Observable, of } from 'rxjs';
-import { AgentService, ReviewStreamEvent } from './agent.service';
+import { Observable } from 'rxjs';
+import { AgentService } from './agent.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Public } from '../common/decorators/public.decorator';
 import { SkipTransform } from '../common/decorators/skip-transform.decorator';
 import { ProjectMemberGuard } from '../common/guards/project-member.guard';
+import { InternalSecretGuard } from '../common/guards/internal-secret.guard';
 import { TriggerReviewDto } from './dto/trigger-review.dto';
+import { DecisionDto } from './dto/approval.dto';
+import {
+  AwaitingApprovalDto,
+  RecordStepDto,
+  ResultDto,
+} from './dto/internal.dto';
 import { ReviewRunDto } from './dto/review-run.dto';
-import { ApprovalDto, DecisionDto } from './dto/approval.dto';
+import { SseFrame } from './sse-event';
 
 @Controller()
 export class AgentController {
@@ -44,15 +53,15 @@ export class AgentController {
   }
 
   /**
-   * SSE stream. Public so the browser's EventSource (which can't send an
-   * Authorization header) can connect. In Phase 1 it emits a single terminal
-   * event and closes; Phase 2 relays live agent step events.
+   * Live agent step stream. Public so the browser's EventSource (which can't
+   * send an Authorization header) can connect; SkipTransform keeps the frames
+   * as raw `text/event-stream`.
    */
   @Public()
   @SkipTransform()
   @Sse('reviews/:id/stream')
-  stream(@Param('id') id: string): Observable<{ data: ReviewStreamEvent }> {
-    return of({ data: this.agentService.buildStreamEvent(id) });
+  stream(@Param('id') id: string): Observable<SseFrame> {
+    return this.agentService.stream(id);
   }
 
   @Post('reviews/:id/approve')
@@ -60,7 +69,7 @@ export class AgentController {
     @CurrentUser('id') userId: string,
     @Param('id') id: string,
     @Body() dto: DecisionDto,
-  ): Promise<ApprovalDto> {
+  ): Promise<ReviewRunDto> {
     return this.agentService.approve(userId, id, dto.comment);
   }
 
@@ -69,7 +78,39 @@ export class AgentController {
     @CurrentUser('id') userId: string,
     @Param('id') id: string,
     @Body() dto: DecisionDto,
-  ): Promise<ApprovalDto> {
+  ): Promise<ReviewRunDto> {
     return this.agentService.reject(userId, id, dto.comment);
+  }
+
+  // --- Internal: called by the agent service, authenticated by shared secret.
+
+  @Public()
+  @UseGuards(InternalSecretGuard)
+  @Post('internal/reviews/:id/steps')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  recordStep(
+    @Param('id') id: string,
+    @Body() dto: RecordStepDto,
+  ): Promise<void> {
+    return this.agentService.recordStep(id, dto);
+  }
+
+  @Public()
+  @UseGuards(InternalSecretGuard)
+  @Post('internal/reviews/:id/awaiting-approval')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  awaitingApproval(
+    @Param('id') id: string,
+    @Body() dto: AwaitingApprovalDto,
+  ): Promise<void> {
+    return this.agentService.setAwaitingApproval(id, dto);
+  }
+
+  @Public()
+  @UseGuards(InternalSecretGuard)
+  @Post('internal/reviews/:id/result')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  result(@Param('id') id: string, @Body() dto: ResultDto): Promise<void> {
+    return this.agentService.finalizeResult(id, dto);
   }
 }

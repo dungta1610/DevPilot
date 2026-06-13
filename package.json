@@ -5,10 +5,12 @@
   "scripts": {
     "dev:web": "pnpm --filter web dev",
     "dev:api": "pnpm --filter api start:dev",
+    "dev:agent": "pnpm --filter agent dev",
     "build": "pnpm -r build",
     "db:up": "docker compose -f docker-compose.dev.yml up -d",
     "db:down": "docker compose -f docker-compose.dev.yml down",
     "api:migrate": "pnpm --filter api prisma migrate dev",
-    "api:generate": "pnpm --filter api prisma generate"
+    "api:generate": "pnpm --filter api prisma generate",
+    "agent:register": "pnpm --filter agent register"
   }
 }

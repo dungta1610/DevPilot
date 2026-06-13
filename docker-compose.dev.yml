@@ -16,5 +16,22 @@ services:
       timeout: 5s
       retries: 5
 
+  # Durable execution engine. The agent service (apps/agent) registers itself
+  # with the admin API (:9070); clients submit/resolve via the ingress (:8080).
+  restate:
+    image: restatedev/restate:latest
+    ports:
+      - "8080:8080"   # ingress — submit workflows, resolve awakeables
+      - "9070:9070"   # admin — register deployments
+    volumes:
+      - restate_data:/restate-data
+    # Reach the host-run agent (apps/agent) from inside the container.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
 volumes:
   postgres_data:
+  restate_data:

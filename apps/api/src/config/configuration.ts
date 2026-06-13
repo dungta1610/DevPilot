@@ -12,6 +12,12 @@ export interface AppConfig {
     callbackUrl: string;
   };
   frontendUrl: string;
+  restate: {
+    /** Restate ingress base URL — where review workflows are submitted. */
+    ingressUrl: string;
+  };
+  /** Shared secret the agent service presents on internal progress callbacks. */
+  internalSecret: string;
 }
 
 /**
@@ -34,4 +40,8 @@ export default (): AppConfig => ({
       'http://localhost:3001/auth/github/callback',
   },
   frontendUrl: process.env.FRONTEND_URL ?? 'http://localhost:3000',
+  restate: {
+    ingressUrl: process.env.RESTATE_INGRESS_URL ?? 'http://localhost:8080',
+  },
+  internalSecret: process.env.API_INTERNAL_SECRET ?? 'dev-internal-secret',
 });

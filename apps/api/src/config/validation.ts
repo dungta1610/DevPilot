@@ -32,4 +32,13 @@ export const validationSchema = Joi.object({
   ),
 
   FRONTEND_URL: Joi.string().default('http://localhost:3000'),
+
+  RESTATE_INGRESS_URL: Joi.string().default('http://localhost:8080'),
+  // Required in production so the agent's internal callbacks are authenticated;
+  // falls back to a dev secret otherwise.
+  API_INTERNAL_SECRET: Joi.string().when('NODE_ENV', {
+    is: 'production',
+    then: Joi.string().required(),
+    otherwise: Joi.string().default('dev-internal-secret'),
+  }),
 });

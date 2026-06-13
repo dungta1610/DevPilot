@@ -138,6 +138,7 @@ model AgentStep {
 
   reviewRun ReviewRun @relation(fields: [reviewRunId], references: [id], onDelete: Cascade)
 
+  @@unique([reviewRunId, agentName])
   @@map("agent_steps")
 }
 
