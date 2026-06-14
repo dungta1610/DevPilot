@@ -12,6 +12,22 @@ export interface ApprovalPayload {
   comment?: string;
 }
 
+/** A conversation turn as stored in the ProjectAssistant Virtual Object. */
+export interface AssistantMessage {
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: string;
+}
+
+/** Snapshot returned by the DigestAgent workflow's `getStatus` shared handler. */
+export interface DigestAgentStatus {
+  status: string | null;
+  projectId: string | null;
+  lastRunAt: string | null;
+  lastSuccessAt: string | null;
+  lastError: string | null;
+}
+
 /**
  * Thin client over the Restate ingress HTTP API. We call the documented ingress
  * routes directly with `fetch` rather than pulling in the Restate clients SDK or
@@ -52,6 +68,52 @@ export class RestateClient {
     await this.post(url, payload);
   }
 
+  // --- Phase 3: ProjectAssistant Virtual Object (key = projectId) ---
+
+  /**
+   * Invoke the assistant's exclusive `chat` handler and wait for the reply.
+   * The Virtual Object serializes concurrent messages per project, so this is
+   * the only lock we need for consistent conversation history.
+   */
+  chat(
+    projectId: string,
+    input: { message: string; userId: string },
+  ): Promise<AssistantMessage> {
+    return this.call<AssistantMessage>(
+      `${this.ingressUrl}/ProjectAssistant/${encodeURIComponent(projectId)}/chat`,
+      input,
+    );
+  }
+
+  getAssistantHistory(projectId: string): Promise<AssistantMessage[]> {
+    return this.call<AssistantMessage[]>(
+      `${this.ingressUrl}/ProjectAssistant/${encodeURIComponent(projectId)}/getHistory`,
+    );
+  }
+
+  async clearAssistantHistory(projectId: string): Promise<void> {
+    await this.call<void>(
+      `${this.ingressUrl}/ProjectAssistant/${encodeURIComponent(projectId)}/clearHistory`,
+    );
+  }
+
+  // --- Phase 3: DigestAgent workflow (workflow id = projectId) ---
+
+  /** Submit the digest loop (fire-and-forget). One run per project key. */
+  async startDigest(projectId: string): Promise<void> {
+    await this.post(
+      `${this.ingressUrl}/DigestAgent/${encodeURIComponent(projectId)}/run/send`,
+      { projectId },
+    );
+  }
+
+  getDigestStatus(projectId: string): Promise<DigestAgentStatus> {
+    return this.call<DigestAgentStatus>(
+      `${this.ingressUrl}/DigestAgent/${encodeURIComponent(projectId)}/getStatus`,
+    );
+  }
+
+  /** Fire-and-forget / void ingress call. */
   private async post(url: string, body: unknown): Promise<void> {
     const res = await fetch(url, {
       method: 'POST',
@@ -63,5 +125,25 @@ export class RestateClient {
       this.logger.error(`Restate ingress ${url} → ${res.status}: ${text}`);
       throw new Error(`Restate ingress call failed (${res.status})`);
     }
+  }
+
+  /**
+   * Request/response ingress call that returns the handler's result. `body` is
+   * omitted for no-input handlers (getHistory, getStatus, clearHistory).
+   */
+  private async call<T>(url: string, body?: unknown): Promise<T> {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers:
+        body === undefined ? undefined : { 'Content-Type': 'application/json' },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      this.logger.error(`Restate ingress ${url} → ${res.status}: ${text}`);
+      throw new Error(`Restate ingress call failed (${res.status})`);
+    }
+    const raw = await res.text();
+    return (raw ? JSON.parse(raw) : undefined) as T;
   }
 }

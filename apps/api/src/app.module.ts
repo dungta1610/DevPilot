@@ -11,6 +11,7 @@ import { TasksModule } from './tasks/tasks.module';
 import { AgentModule } from './agent/agent.module';
 import { ChatModule } from './chat/chat.module';
 import { DigestsModule } from './digests/digests.module';
+import { InternalModule } from './internal/internal.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 
 @Module({
@@ -29,6 +30,7 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
     AgentModule,
     ChatModule,
     DigestsModule,
+    InternalModule,
   ],
   providers: [
     // JWT auth is enforced on every route; opt out with @Public().

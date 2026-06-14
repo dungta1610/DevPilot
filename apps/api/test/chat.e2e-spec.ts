@@ -1,5 +1,6 @@
 import request from 'supertest';
-import { Project, ProjectRole, TaskPriority, User } from '@prisma/client';
+import { Project, ProjectRole, User } from '@prisma/client';
+import { AssistantMessage, RestateClient } from '../src/agent/restate.client';
 import {
   createTestApp,
   resetDb,
@@ -8,17 +9,57 @@ import {
   TestContext,
 } from './test-utils';
 
-describe('Chat (e2e)', () => {
+/**
+ * The assistant now lives in a Restate Virtual Object, so this suite stubs the
+ * ingress client with an in-memory object that mimics the K/V history. We verify
+ * the NestJS adapter: member-guarded routes, the request/response mapping, and
+ * that the user id + message are forwarded to the object's `chat` handler.
+ */
+describe('Chat / project assistant (e2e)', () => {
   let ctx: TestContext;
   let owner: User;
   let ownerToken: string;
   let project: Project;
 
+  // In-memory stand-in for the ProjectAssistant Virtual Object K/V store.
+  const histories = new Map<string, AssistantMessage[]>();
+
+  const restate: Partial<RestateClient> = {
+    chat: jest.fn(async (projectId: string, input: { message: string }) => {
+      const reply: AssistantMessage = {
+        role: 'assistant',
+        content: `You said: ${input.message}`,
+        timestamp: new Date().toISOString(),
+      };
+      const prior = histories.get(projectId) ?? [];
+      histories.set(projectId, [
+        ...prior,
+        {
+          role: 'user',
+          content: input.message,
+          timestamp: new Date().toISOString(),
+        },
+        reply,
+      ]);
+      return reply;
+    }),
+    getAssistantHistory: jest.fn(
+      async (projectId: string) => histories.get(projectId) ?? [],
+    ),
+    clearAssistantHistory: jest.fn(async (projectId: string) => {
+      histories.delete(projectId);
+    }),
+  };
+
+  const auth = (token: string) => ({ Authorization: `Bearer ${token}` });
+
   beforeAll(async () => {
-    ctx = await createTestApp();
+    ctx = await createTestApp([{ provide: RestateClient, useValue: restate }]);
   });
 
   beforeEach(async () => {
+    jest.clearAllMocks();
+    histories.clear();
     await resetDb(ctx.prisma);
     owner = await seedUser(ctx.prisma, { email: 'owner@example.com' });
     ownerToken = tokenFor(ctx.jwt, owner);
@@ -37,44 +78,22 @@ describe('Chat (e2e)', () => {
     await ctx.app.close();
   });
 
-  const auth = (token: string) => ({ Authorization: `Bearer ${token}` });
-
-  it('POST /projects/:id/chat persists the turn and returns an assistant reply', async () => {
+  it('POST /projects/:id/chat returns the assistant reply and forwards the user id', async () => {
     const res = await request(ctx.app.getHttpServer())
       .post(`/projects/${project.id}/chat`)
       .set(auth(ownerToken))
-      .send({ content: 'Hello there' });
+      .send({ content: 'What should I focus on?' });
 
     expect(res.status).toBe(201);
     expect(res.body.data).toMatchObject({ role: 'assistant' });
-    expect(typeof res.body.data.content).toBe('string');
-    expect(res.body.data.content.length).toBeGreaterThan(0);
-
-    const stored = await ctx.prisma.chatMessage.findMany({
-      where: { projectId: project.id },
+    expect(res.body.data.content).toContain('What should I focus on?');
+    expect(restate.chat).toHaveBeenCalledWith(project.id, {
+      message: 'What should I focus on?',
+      userId: owner.id,
     });
-    expect(stored).toHaveLength(2); // user + assistant
   });
 
-  it("grounds the reply in the project's real tasks", async () => {
-    await ctx.prisma.task.create({
-      data: {
-        projectId: project.id,
-        title: 'Add idempotency keys',
-        priority: TaskPriority.URGENT,
-      },
-    });
-
-    const res = await request(ctx.app.getHttpServer())
-      .post(`/projects/${project.id}/chat`)
-      .set(auth(ownerToken))
-      .send({ content: 'What should I focus on this sprint?' });
-
-    expect(res.status).toBe(201);
-    expect(res.body.data.content).toContain('Add idempotency keys');
-  });
-
-  it('GET /projects/:id/chat/history returns messages oldest-first', async () => {
+  it('GET /projects/:id/chat/history maps stored turns oldest-first', async () => {
     await request(ctx.app.getHttpServer())
       .post(`/projects/${project.id}/chat`)
       .set(auth(ownerToken))
@@ -91,6 +110,25 @@ describe('Chat (e2e)', () => {
       content: 'First question',
     });
     expect(res.body.data[1].role).toBe('assistant');
+    expect(res.body.data[0].id).toBeTruthy();
+  });
+
+  it('DELETE /projects/:id/chat/history clears the conversation', async () => {
+    await request(ctx.app.getHttpServer())
+      .post(`/projects/${project.id}/chat`)
+      .set(auth(ownerToken))
+      .send({ content: 'Hello' });
+
+    const cleared = await request(ctx.app.getHttpServer())
+      .delete(`/projects/${project.id}/chat/history`)
+      .set(auth(ownerToken));
+    expect(cleared.status).toBe(204);
+    expect(restate.clearAssistantHistory).toHaveBeenCalledWith(project.id);
+
+    const after = await request(ctx.app.getHttpServer())
+      .get(`/projects/${project.id}/chat/history`)
+      .set(auth(ownerToken));
+    expect(after.body.data).toHaveLength(0);
   });
 
   it('returns 404 for a project the user is not a member of', async () => {
@@ -109,6 +147,7 @@ describe('Chat (e2e)', () => {
       .set(auth(outsiderToken))
       .send({ content: 'sneaking in' });
     expect(send.status).toBe(404);
+    expect(restate.chat).not.toHaveBeenCalled();
   });
 
   it('rejects an empty message', async () => {

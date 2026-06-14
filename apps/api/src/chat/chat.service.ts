@@ -1,115 +1,37 @@
 import { Injectable } from '@nestjs/common';
-import {
-  ChatRole,
-  ReviewStatus,
-  TaskPriority,
-  TaskStatus,
-} from '@prisma/client';
-import { PrismaService } from '../prisma/prisma.service';
-import { ChatMessageDto, toChatMessageDto } from './dto/chat-message.dto';
+import { RestateClient } from '../agent/restate.client';
+import { ChatMessageDto, fromAssistantMessage } from './dto/chat-message.dto';
 
 /**
- * Phase 1 implementation: persists chat turns and answers with a rule-based
- * assistant grounded in the project's real tasks and reviews — no external LLM.
- * Phase 2 replaces `composeReply` with a tool-using agent and streams tokens
- * over SSE; the persistence and API shape stay the same.
+ * Phase 3: the assistant is a Restate **Virtual Object** (`ProjectAssistant`),
+ * keyed by projectId. This service is a thin adapter — it forwards to the object
+ * over the Restate ingress and maps the stored turns onto the wire DTO. The
+ * object owns the conversation history (in its K/V store) and serializes
+ * concurrent messages per project, so there's no DB write or lock here.
  */
 @Injectable()
 export class ChatService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly restate: RestateClient) {}
 
   async getHistory(projectId: string): Promise<ChatMessageDto[]> {
-    const messages = await this.prisma.chatMessage.findMany({
-      where: { projectId },
-      orderBy: { createdAt: 'asc' },
-    });
-    return messages.map(toChatMessageDto);
+    const history = await this.restate.getAssistantHistory(projectId);
+    return history.map((m, i) => fromAssistantMessage(m, i));
   }
 
-  /** Records the user's message, generates a grounded reply, and persists both. */
+  /** Sends the user's message and returns the assistant's reply. */
   async sendMessage(
     projectId: string,
     content: string,
+    userId: string,
   ): Promise<ChatMessageDto> {
-    await this.prisma.chatMessage.create({
-      data: { projectId, role: ChatRole.USER, content },
+    const reply = await this.restate.chat(projectId, {
+      message: content,
+      userId,
     });
-
-    const replyText = await this.composeReply(projectId, content);
-
-    const reply = await this.prisma.chatMessage.create({
-      data: { projectId, role: ChatRole.ASSISTANT, content: replyText },
-    });
-    return toChatMessageDto(reply);
+    return fromAssistantMessage(reply);
   }
 
-  /** Answers grounded in the project's current tasks and reviews. */
-  private async composeReply(
-    projectId: string,
-    prompt: string,
-  ): Promise<string> {
-    const p = prompt.toLowerCase();
-
-    const [urgentOpen, inProgress, openTasks, awaitingApproval, latestReview] =
-      await Promise.all([
-        this.prisma.task.findMany({
-          where: {
-            projectId,
-            priority: TaskPriority.URGENT,
-            status: { not: TaskStatus.DONE },
-          },
-          orderBy: { createdAt: 'asc' },
-        }),
-        this.prisma.task.count({
-          where: { projectId, status: TaskStatus.IN_PROGRESS },
-        }),
-        this.prisma.task.count({
-          where: { projectId, status: { not: TaskStatus.DONE } },
-        }),
-        this.prisma.reviewRun.count({
-          where: { projectId, status: ReviewStatus.AWAITING_APPROVAL },
-        }),
-        this.prisma.reviewRun.findFirst({
-          where: { projectId, resultSummary: { not: null } },
-          orderBy: { startedAt: 'desc' },
-        }),
-      ]);
-
-    if (/sprint|focus|next|priorit|work on/.test(p)) {
-      const steps: string[] = [];
-      if (awaitingApproval > 0) {
-        steps.push(
-          `clear the ${plural(awaitingApproval, 'review')} awaiting your approval — those block merges`,
-        );
-      }
-      if (urgentOpen.length > 0) {
-        const more =
-          urgentOpen.length > 1 ? ` (plus ${urgentOpen.length - 1} more)` : '';
-        steps.push(`pick up the urgent task "${urgentOpen[0].title}"${more}`);
-      }
-      if (steps.length === 0) {
-        return `Nothing urgent right now — ${plural(openTasks, 'open task')} and no reviews waiting. Good moment to push the ${plural(inProgress, 'in-progress item')} toward done or groom the backlog.`;
-      }
-      return `I'd ${steps.join(', then ')}.`;
-    }
-
-    if (p.includes('security')) {
-      return latestReview?.resultSummary
-        ? `The most recent review summarized: "${latestReview.resultSummary}" Treat any high-severity finding as a release blocker.`
-        : `No completed reviews with findings yet for this project. Trigger a review on an open PR and I'll surface what the security agent flags.`;
-    }
-
-    if (/quality|trend/.test(p)) {
-      return latestReview?.resultSummary
-        ? `Latest review summary: "${latestReview.resultSummary}" There ${awaitingApproval === 1 ? 'is' : 'are'} ${plural(awaitingApproval, 'review')} still awaiting approval.`
-        : `No review findings recorded yet, so there's no quality trend to report. ${plural(openTasks, 'open task')} on the board right now.`;
-    }
-
-    return `Here's the current state: ${plural(openTasks, 'open task')} (${inProgress} in progress) and ${plural(awaitingApproval, 'review')} awaiting approval. Ask me about sprint planning, security findings, code-quality trends, or what to work on next.`;
+  async clearHistory(projectId: string): Promise<void> {
+    await this.restate.clearAssistantHistory(projectId);
   }
-}
-
-/** "1 task" / "3 tasks". */
-function plural(n: number, noun: string): string {
-  return `${n} ${noun}${n === 1 ? '' : 's'}`;
 }

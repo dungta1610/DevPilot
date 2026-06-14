@@ -1,7 +1,8 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import { NestFactory, Reflector } from '@nestjs/core';
+import { Reflector } from '@nestjs/core';
+import { Test } from '@nestjs/testing';
 import { User } from '@prisma/client';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
@@ -14,9 +15,29 @@ export interface TestContext {
   jwt: JwtService;
 }
 
-/** Boots a Nest app configured exactly like main.ts for integration tests. */
-export async function createTestApp(): Promise<TestContext> {
-  const app = await NestFactory.create(AppModule, { logger: false });
+/** A provider to swap out for a stub (e.g. the Restate ingress client). */
+export interface ProviderOverride {
+  provide: unknown;
+  useValue: unknown;
+}
+
+/**
+ * Boots a Nest app configured exactly like main.ts for integration tests.
+ * Pass `overrides` to stub providers that would otherwise reach external
+ * services (the Restate ingress client, for instance).
+ */
+export async function createTestApp(
+  overrides: ProviderOverride[] = [],
+): Promise<TestContext> {
+  let builder = Test.createTestingModule({ imports: [AppModule] });
+  for (const override of overrides) {
+    builder = builder
+      .overrideProvider(override.provide)
+      .useValue(override.useValue);
+  }
+  const moduleRef = await builder.compile();
+
+  const app = moduleRef.createNestApplication({ logger: false });
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,

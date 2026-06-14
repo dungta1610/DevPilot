@@ -2,11 +2,11 @@ import { Module } from '@nestjs/common';
 import { ProjectsModule } from '../projects/projects.module';
 import { AgentController } from './agent.controller';
 import { AgentService } from './agent.service';
-import { RestateClient } from './restate.client';
+import { RestateModule } from './restate.module';
 
 @Module({
-  imports: [ProjectsModule],
+  imports: [ProjectsModule, RestateModule],
   controllers: [AgentController],
-  providers: [AgentService, RestateClient],
+  providers: [AgentService],
 })
 export class AgentModule {}
