@@ -180,6 +180,19 @@ export function useRejectReview(reviewId: string) {
   });
 }
 
+export function useCancelReview(reviewId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.cancelReview(reviewId),
+    onSuccess: (review) => {
+      qc.setQueryData(queryKeys.review(reviewId), review);
+      qc.invalidateQueries({ queryKey: queryKeys.reviews(review.projectId) });
+      toast.success("Review cancelled");
+    },
+    onError: () => toast.error("Failed to cancel review"),
+  });
+}
+
 export function useChatHistory(projectId: string) {
   return useQuery({
     queryKey: queryKeys.chat(projectId),

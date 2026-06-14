@@ -12,17 +12,33 @@ export type StepStatus = 'RUNNING' | 'COMPLETED' | 'FAILED' | 'SKIPPED';
  * failed ping must never fail the review, so every error is swallowed.
  */
 async function post(path: string, body: unknown): Promise<void> {
-  try {
-    await fetch(`${config.apiInternalUrl}${path}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-internal-secret': config.apiInternalSecret,
-      },
-      body: JSON.stringify(body),
-    });
-  } catch (err) {
-    console.warn(`[notify] ${path} failed:`, (err as Error).message);
+  // A couple of quick retries in case the NestJS API is momentarily down or
+  // restarting. Still best-effort: after the last attempt we give up silently
+  // rather than ever failing the review over a missed UI ping.
+  const attempts = 3;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      const res = await fetch(`${config.apiInternalUrl}${path}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-internal-secret': config.apiInternalSecret,
+        },
+        body: JSON.stringify(body),
+      });
+      if (res.ok) return;
+      if (attempt === attempts) {
+        console.warn(`[notify] ${path} → ${res.status} (gave up)`);
+        return;
+      }
+    } catch (err) {
+      if (attempt === attempts) {
+        console.warn(`[notify] ${path} failed:`, (err as Error).message);
+        return;
+      }
+    }
+    // Linear backoff: 200ms, 400ms.
+    await new Promise((resolve) => setTimeout(resolve, attempt * 200));
   }
 }
 

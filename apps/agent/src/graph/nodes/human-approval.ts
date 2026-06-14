@@ -22,6 +22,10 @@ export async function humanApprovalNode(
 ): Promise<Partial<ReviewState>> {
   const approval = ctx.awakeable<ApprovalDecision>();
 
+  // Stash the awakeable id in workflow state so the `cancel` handler can resolve
+  // it (reject) while we're suspended here. Cleared once a decision lands.
+  ctx.set('awakeableId', approval.id);
+
   await notifyStep(state.reviewRunId, 'human_approval', 'RUNNING');
   await notifyAwaitingApproval(
     state.reviewRunId,
@@ -36,6 +40,8 @@ export async function humanApprovalNode(
       comment: 'Auto-rejected: approval timed out after 24h',
     })),
   ]);
+
+  ctx.clear('awakeableId');
 
   await notifyStep(
     state.reviewRunId,

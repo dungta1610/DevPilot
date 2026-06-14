@@ -1,4 +1,4 @@
-import type { WorkflowContext } from '@restatedev/restate-sdk';
+import type { RunOptions, WorkflowContext } from '@restatedev/restate-sdk';
 import { notifyStep } from './notify';
 
 /**
@@ -11,7 +11,8 @@ import { notifyStep } from './notify';
  *
  * Any throw emits FAILED and re-throws so Restate can apply its retry policy.
  * `summarize` shapes the journaled result into the compact `output` object the
- * web pipeline reads (e.g. `{ issues: 3 }`).
+ * web pipeline reads (e.g. `{ issues: 3 }`). `runOptions` sets an explicit retry
+ * policy on the underlying `ctx.run` (see lib/retry.ts).
  */
 export async function withStep<T>(
   ctx: WorkflowContext,
@@ -19,11 +20,14 @@ export async function withStep<T>(
   stepName: string,
   action: () => Promise<T>,
   summarize?: (result: T) => Record<string, unknown>,
+  runOptions?: RunOptions<T>,
 ): Promise<T> {
   await notifyStep(reviewRunId, stepName, 'RUNNING');
   const startedAt = Date.now();
   try {
-    const result = await ctx.run(stepName, action);
+    const result = runOptions
+      ? await ctx.run(stepName, action, runOptions)
+      : await ctx.run(stepName, action);
     await notifyStep(
       reviewRunId,
       stepName,

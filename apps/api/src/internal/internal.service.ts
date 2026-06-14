@@ -130,6 +130,15 @@ export class InternalService {
     };
   }
 
+  /** Cheap existence check — lets the digest agent stop itself for a deleted project. */
+  async projectExists(projectId: string): Promise<{ exists: boolean }> {
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+      select: { id: true },
+    });
+    return { exists: project !== null };
+  }
+
   /** Persist a digest produced by the agent. Stored as SENT (it's delivered). */
   async createDigest(
     projectId: string,

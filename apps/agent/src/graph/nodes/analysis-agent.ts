@@ -1,7 +1,9 @@
 import type { WorkflowContext } from '@restatedev/restate-sdk';
 import { HumanMessage, SystemMessage } from '@langchain/core/messages';
-import { buildGeminiModel, parseJsonResponse } from '../../llm/gemini';
+import { buildGeminiModel } from '../../llm/gemini';
+import { parseLLMJson } from '../../lib/parse-llm-json';
 import { withStep } from '../../lib/step';
+import { LLM_RETRY } from '../../lib/retry';
 import type { AgentResult, Issue, Severity, ReviewState } from '../state';
 
 const SEVERITIES: Severity[] = ['low', 'medium', 'high', 'critical'];
@@ -57,8 +59,12 @@ export function runAnalysisAgent(
         ),
       ]);
       try {
-        return normalize(parseJsonResponse<Partial<AgentResult>>(response.content));
+        return normalize(
+          parseLLMJson<Partial<AgentResult>>(response.content, spec.stepName),
+        );
       } catch {
+        // Robust parsing still failed — degrade to an empty result rather than
+        // failing the whole review over one specialist's malformed output.
         return {
           issues: [],
           summary:
@@ -68,6 +74,7 @@ export function runAnalysisAgent(
       }
     },
     spec.outputSummary,
+    LLM_RETRY,
   );
 }
 

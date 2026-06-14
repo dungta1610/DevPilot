@@ -38,10 +38,20 @@ export interface DigestAgentStatus {
 export class RestateClient {
   private readonly logger = new Logger(RestateClient.name);
   private readonly ingressUrl: string;
+  private readonly apiKey: string;
 
   constructor(config: ConfigService) {
     this.ingressUrl =
       config.get<string>('restate.ingressUrl') ?? 'http://localhost:8080';
+    this.apiKey = config.get<string>('restate.apiKey') ?? '';
+  }
+
+  /** Auth + content-type headers; the bearer token is added only for Restate Cloud. */
+  private headers(json: boolean): Record<string, string> {
+    const headers: Record<string, string> = {};
+    if (json) headers['Content-Type'] = 'application/json';
+    if (this.apiKey) headers.Authorization = `Bearer ${this.apiKey}`;
+    return headers;
   }
 
   /**
@@ -66,6 +76,15 @@ export class RestateClient {
   ): Promise<void> {
     const url = `${this.ingressUrl}/restate/awakeables/${awakeableId}/resolve`;
     await this.post(url, payload);
+  }
+
+  /**
+   * Invoke the workflow's `cancel` shared handler. If the review is awaiting
+   * approval, this rejects it and the workflow ends cleanly.
+   */
+  async cancelReview(reviewRunId: string): Promise<void> {
+    const url = `${this.ingressUrl}/ReviewWorkflow/${encodeURIComponent(reviewRunId)}/cancel`;
+    await this.call<void>(url);
   }
 
   // --- Phase 3: ProjectAssistant Virtual Object (key = projectId) ---
@@ -117,7 +136,7 @@ export class RestateClient {
   private async post(url: string, body: unknown): Promise<void> {
     const res = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: this.headers(true),
       body: JSON.stringify(body),
     });
     if (!res.ok) {
@@ -134,8 +153,7 @@ export class RestateClient {
   private async call<T>(url: string, body?: unknown): Promise<T> {
     const res = await fetch(url, {
       method: 'POST',
-      headers:
-        body === undefined ? undefined : { 'Content-Type': 'application/json' },
+      headers: this.headers(body !== undefined),
       body: body === undefined ? undefined : JSON.stringify(body),
     });
     if (!res.ok) {

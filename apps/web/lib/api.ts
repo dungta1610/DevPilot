@@ -208,6 +208,18 @@ export const api = {
     return data;
   },
 
+  async cancelReview(reviewId: string): Promise<ReviewRun> {
+    if (USE_MOCKS) {
+      const review = findReview(reviewId);
+      if (!review) throw new Error("Review not found");
+      review.status = "rejected";
+      review.completedAt = new Date().toISOString();
+      return delay(review, 400);
+    }
+    const { data } = await http.post<ReviewRun>(`/reviews/${reviewId}/cancel`);
+    return data;
+  },
+
   // --- Assistant chat ---
   async chatHistory(projectId: string): Promise<ChatMessage[]> {
     if (USE_MOCKS) return delay([...(mockChats[projectId] ?? [])], 200);

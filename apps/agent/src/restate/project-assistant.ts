@@ -1,5 +1,6 @@
 import * as restate from '@restatedev/restate-sdk';
 import { runAssistantGraph, type ChatMessage } from '../graph/assistant/assistant-graph';
+import { LLM_RETRY } from '../lib/retry';
 
 export type { ChatMessage };
 
@@ -29,13 +30,23 @@ export const projectAssistant = restate.object({
       ctx: restate.ObjectContext,
       input: { message: string; userId: string },
     ): Promise<ChatMessage> => {
+      // TERMINAL: an empty message is a client error — retrying can't fix it.
+      if (!input.message?.trim()) {
+        throw new restate.TerminalError('Message cannot be empty', {
+          errorCode: 400,
+        });
+      }
+
       const history = (await ctx.get<ChatMessage[]>('history')) ?? [];
       const recent = history.slice(-HISTORY_LIMIT);
 
       // Journaled: a crash after Gemini answers replays this result instead of
-      // re-calling (and re-billing) the model.
-      const reply = await ctx.run('assistant_llm', () =>
-        runAssistantGraph(ctx.key, recent, input.message),
+      // re-calling (and re-billing) the model. Patient retry policy for rate
+      // limits; an exhausted retry surfaces as a TerminalError to the caller.
+      const reply = await ctx.run(
+        'assistant_llm',
+        () => runAssistantGraph(ctx.key, recent, input.message),
+        LLM_RETRY,
       );
 
       const assistantMessage: ChatMessage = {

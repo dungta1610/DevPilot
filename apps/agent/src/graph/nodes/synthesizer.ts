@@ -1,7 +1,9 @@
 import type { WorkflowContext } from '@restatedev/restate-sdk';
 import { HumanMessage, SystemMessage } from '@langchain/core/messages';
-import { buildGeminiModel, parseJsonResponse } from '../../llm/gemini';
+import { buildGeminiModel } from '../../llm/gemini';
+import { parseLLMJson } from '../../lib/parse-llm-json';
 import { withStep } from '../../lib/step';
+import { LLM_RETRY } from '../../lib/retry';
 import type { AgentResult, ReviewReport, ReviewState } from '../state';
 
 const SYSTEM_PROMPT = `You are synthesizing the results from three specialized code-review agents (quality, security, performance) into a single GitHub PR review.
@@ -75,7 +77,7 @@ export async function synthesizerNode(
         ),
       ]);
       try {
-        const parsed = parseJsonResponse<ReviewReport>(res.content);
+        const parsed = parseLLMJson<ReviewReport>(res.content, 'synthesizer');
         return {
           ...parsed,
           totalIssues: totalIssues(
@@ -89,6 +91,7 @@ export async function synthesizerNode(
       }
     },
     () => ({ sections: 3 }),
+    LLM_RETRY,
   );
   return { synthesis };
 }

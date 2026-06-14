@@ -142,6 +142,23 @@ describe('Internal project data API (e2e)', () => {
     expect(stored[0].sentAt).not.toBeNull();
   });
 
+  it('GET exists reports project presence', async () => {
+    const present = await withSecret(
+      request(ctx.app.getHttpServer()).get(
+        `/internal/projects/${project.id}/exists`,
+      ),
+    );
+    expect(present.status).toBe(200);
+    expect(present.body.data).toEqual({ exists: true });
+
+    const missing = await withSecret(
+      request(ctx.app.getHttpServer()).get(
+        `/internal/projects/00000000-0000-0000-0000-000000000000/exists`,
+      ),
+    );
+    expect(missing.body.data).toEqual({ exists: false });
+  });
+
   it('rejects an empty digest body', async () => {
     const res = await withSecret(
       request(ctx.app.getHttpServer())

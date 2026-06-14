@@ -1,5 +1,6 @@
 import type { WorkflowContext } from '@restatedev/restate-sdk';
 import { withStep } from '../../lib/step';
+import { GITHUB_RETRY } from '../../lib/retry';
 import { fetchPullRequest } from '../tools/github.tools';
 import type { ReviewState } from '../state';
 
@@ -20,6 +21,7 @@ export async function fetchPrNode(
       lines: r.prDiff.split('\n').length,
       files: r.prMetadata.changedFiles ?? 0,
     }),
+    GITHUB_RETRY,
   );
   return {
     prDiff: fetched.prDiff,

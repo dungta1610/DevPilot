@@ -28,6 +28,7 @@ describe('Agent / reviews (e2e)', () => {
   const restate = {
     submitReview: jest.fn().mockResolvedValue(undefined),
     resolveApproval: jest.fn().mockResolvedValue(undefined),
+    cancelReview: jest.fn().mockResolvedValue(undefined),
   };
 
   const INTERNAL_SECRET = 'dev-internal-secret';
@@ -179,6 +180,34 @@ describe('Agent / reviews (e2e)', () => {
       approved: true,
       comment: 'Ship it',
     });
+  });
+
+  it('cancels a running review via the workflow cancel handler', async () => {
+    const { body } = await trigger(); // status: running
+    const reviewId = body.data.id;
+
+    const res = await request(app.getHttpServer())
+      .post(`/reviews/${reviewId}/cancel`)
+      .set(auth(ownerToken));
+    expect(res.status).toBe(201);
+    expect(restate.cancelReview).toHaveBeenCalledWith(reviewId);
+  });
+
+  it('refuses to cancel a review that has already finished (400)', async () => {
+    const { body } = await trigger();
+    const reviewId = body.data.id;
+
+    await request(app.getHttpServer())
+      .post(`/internal/reviews/${reviewId}/result`)
+      .set('x-internal-secret', INTERNAL_SECRET)
+      .send({ status: 'completed' })
+      .expect(204);
+
+    const res = await request(app.getHttpServer())
+      .post(`/reviews/${reviewId}/cancel`)
+      .set(auth(ownerToken));
+    expect(res.status).toBe(400);
+    expect(restate.cancelReview).not.toHaveBeenCalled();
   });
 
   it('rejects approval when the review is not awaiting approval (400)', async () => {

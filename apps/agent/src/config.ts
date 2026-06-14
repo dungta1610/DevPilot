@@ -17,6 +17,9 @@ export const config = {
   /** Port the Restate SDK HTTP server listens on. */
   agentPort: Number(process.env.AGENT_PORT ?? 9080),
 
+  /** Port for the standalone liveness probe (kept off the Restate port). */
+  healthPort: Number(process.env.AGENT_HEALTH_PORT ?? 9081),
+
   /** NestJS internal API used to write step progress back for the SSE stream. */
   apiInternalUrl: process.env.API_INTERNAL_URL ?? 'http://localhost:3001',
 

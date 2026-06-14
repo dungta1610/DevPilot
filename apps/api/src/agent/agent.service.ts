@@ -350,6 +350,37 @@ export class AgentService {
     return this.decide(userId, reviewId, false, comment);
   }
 
+  /**
+   * Cancel a review. Only meaningful while it's still in flight; we then ask the
+   * workflow's `cancel` handler to resolve the approval awakeable (reject). The
+   * workflow's own completion callback flips the final status, so we just return
+   * the current state.
+   */
+  async cancelReview(userId: string, reviewId: string): Promise<ReviewRunDto> {
+    const run = await this.prisma.reviewRun.findUnique({
+      where: { id: reviewId },
+      include: { steps: { orderBy: { executedAt: 'asc' } } },
+    });
+    if (!run) throw new NotFoundException('Review not found');
+    await this.projectsService.assertMember(userId, run.projectId);
+
+    if (
+      run.status !== ReviewStatus.RUNNING &&
+      run.status !== ReviewStatus.AWAITING_APPROVAL
+    ) {
+      throw new BadRequestException('Review is not cancellable');
+    }
+
+    try {
+      await this.restate.cancelReview(reviewId);
+    } catch (err) {
+      this.logger.error(`Failed to cancel review ${reviewId}`, err as Error);
+      throw new BadGatewayException('Could not cancel the review workflow');
+    }
+
+    return toReviewRunDto(run);
+  }
+
   private async decide(
     userId: string,
     reviewId: string,

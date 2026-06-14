@@ -1,6 +1,7 @@
 import type { WorkflowContext } from '@restatedev/restate-sdk';
 import { TerminalError } from '@restatedev/restate-sdk';
 import { withStep } from '../../lib/step';
+import { GITHUB_RETRY } from '../../lib/retry';
 import { postReviewComment } from '../tools/github.tools';
 import type { ReviewState } from '../state';
 
@@ -28,6 +29,7 @@ export async function postCommentNode(
       return { commentId };
     },
     (r) => ({ commentId: r.commentId }),
+    GITHUB_RETRY,
   );
   return {};
 }

@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "start": "tsx src/index.ts",
+    "start:prod": "tsx src/index.ts",
     "build": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
     "register": "curl -X POST http://localhost:9070/deployments -H 'Content-Type: application/json' -d '{\"uri\": \"http://host.docker.internal:9080\"}'"

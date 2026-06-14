@@ -18,7 +18,7 @@ import { EmptyState } from "@/components/shared/EmptyState";
 import { AgentPipeline } from "@/components/reviews/AgentPipeline";
 import { ApprovalPanel } from "@/components/reviews/ApprovalPanel";
 import { ReviewResult } from "@/components/reviews/ReviewResult";
-import { useRejectReview, useReview } from "@/lib/queries";
+import { useCancelReview, useReview } from "@/lib/queries";
 import { useReviewStream } from "@/lib/use-review-stream";
 import { relativeTime, shortPrLabel } from "@/lib/format";
 import { AGENT_LABELS, type ReviewRun } from "@/lib/types";
@@ -120,7 +120,7 @@ function ReviewHeader({
   review: ReviewRun;
   isRunning: boolean;
 }) {
-  const reject = useRejectReview(review.id);
+  const cancel = useCancelReview(review.id);
   return (
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div className="min-w-0 space-y-1">
@@ -146,8 +146,8 @@ function ReviewHeader({
         <Button
           variant="outline"
           size="sm"
-          onClick={() => reject.mutate()}
-          disabled={reject.isPending}
+          onClick={() => cancel.mutate()}
+          disabled={cancel.isPending}
         >
           Cancel run
         </Button>

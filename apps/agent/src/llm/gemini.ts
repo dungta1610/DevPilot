@@ -17,13 +17,3 @@ export function buildGeminiModel(temperature = 0.1): ChatGoogleGenerativeAI {
     maxOutputTokens: 8192,
   });
 }
-
-/**
- * Gemini often wraps JSON in ```json fences. Strip them and parse. Throws if the
- * payload still isn't valid JSON (the caller decides whether that's terminal).
- */
-export function parseJsonResponse<T>(content: unknown): T {
-  const text = typeof content === 'string' ? content : JSON.stringify(content);
-  const clean = text.replace(/```json\s*|\s*```/g, '').trim();
-  return JSON.parse(clean) as T;
-}

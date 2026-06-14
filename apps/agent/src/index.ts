@@ -1,6 +1,7 @@
 import './load-env';
 import * as restate from '@restatedev/restate-sdk';
 import { config } from './config';
+import { startHealthServer } from './health';
 import { reviewWorkflow } from './restate/review-workflow';
 import { projectAssistant } from './restate/project-assistant';
 import { digestAgent } from './restate/digest-agent';
@@ -21,6 +22,7 @@ restate
   .listen(config.agentPort)
   .then((port) => {
     console.log(`DevPilot agent (Restate + LangGraph) listening on :${port}`);
+    startHealthServer();
   })
   .catch((err: unknown) => {
     console.error('Failed to start agent endpoint:', err);

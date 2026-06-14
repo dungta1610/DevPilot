@@ -20,6 +20,22 @@ export async function getInternal<T>(path: string): Promise<T> {
   return (await res.json()) as T;
 }
 
+/** True if the project still exists. Used to terminally stop the digest loop. */
+export async function checkProjectExists(projectId: string): Promise<boolean> {
+  const res = await fetch(
+    `${config.apiInternalUrl}/internal/projects/${projectId}/exists`,
+    { headers: { 'x-internal-secret': config.apiInternalSecret } },
+  );
+  if (res.status === 404) return false;
+  if (!res.ok) {
+    // Ambiguous (network/5xx): treat as "exists" so a transient API blip
+    // doesn't permanently kill the digest agent.
+    throw new Error(`exists check failed: ${res.status}`);
+  }
+  const body = (await res.json()) as { exists?: boolean };
+  return body.exists !== false;
+}
+
 export async function postInternal<T>(path: string, body: unknown): Promise<T> {
   const res = await fetch(`${config.apiInternalUrl}${path}`, {
     method: 'POST',

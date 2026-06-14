@@ -34,6 +34,9 @@ export const validationSchema = Joi.object({
   FRONTEND_URL: Joi.string().default('http://localhost:3000'),
 
   RESTATE_INGRESS_URL: Joi.string().default('http://localhost:8080'),
+  // Restate Cloud ingress requires a bearer token; local Restate does not, so
+  // this is optional and simply omitted from request headers when unset.
+  RESTATE_API_KEY: Joi.string().optional().allow(''),
   // Required in production so the agent's internal callbacks are authenticated;
   // falls back to a dev secret otherwise.
   API_INTERNAL_SECRET: Joi.string().when('NODE_ENV', {

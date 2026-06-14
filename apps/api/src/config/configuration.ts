@@ -15,6 +15,8 @@ export interface AppConfig {
   restate: {
     /** Restate ingress base URL — where review workflows are submitted. */
     ingressUrl: string;
+    /** Bearer token for Restate Cloud ingress (empty for local Restate). */
+    apiKey: string;
   };
   /** Shared secret the agent service presents on internal progress callbacks. */
   internalSecret: string;
@@ -42,6 +44,7 @@ export default (): AppConfig => ({
   frontendUrl: process.env.FRONTEND_URL ?? 'http://localhost:3000',
   restate: {
     ingressUrl: process.env.RESTATE_INGRESS_URL ?? 'http://localhost:8080',
+    apiKey: process.env.RESTATE_API_KEY ?? '',
   },
   internalSecret: process.env.API_INTERNAL_SECRET ?? 'dev-internal-secret',
 });

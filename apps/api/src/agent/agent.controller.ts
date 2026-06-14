@@ -82,6 +82,14 @@ export class AgentController {
     return this.agentService.reject(userId, id, dto.comment);
   }
 
+  @Post('reviews/:id/cancel')
+  cancel(
+    @CurrentUser('id') userId: string,
+    @Param('id') id: string,
+  ): Promise<ReviewRunDto> {
+    return this.agentService.cancelReview(userId, id);
+  }
+
   // --- Internal: called by the agent service, authenticated by shared secret.
 
   @Public()

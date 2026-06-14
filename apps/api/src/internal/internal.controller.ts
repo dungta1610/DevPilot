@@ -50,6 +50,11 @@ export class InternalController {
     return this.internal.getStats(projectId);
   }
 
+  @Get('exists')
+  exists(@Param('id') projectId: string): Promise<{ exists: boolean }> {
+    return this.internal.projectExists(projectId);
+  }
+
   @Post('digests')
   @HttpCode(HttpStatus.CREATED)
   createDigest(
