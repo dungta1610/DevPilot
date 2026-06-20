@@ -37,7 +37,7 @@ NestJS → Restate server → index.ts → reviewWorkflow.run()
 
 # PHẦN 1 — Nền móng: 4 file khởi động
 
-Bắt đầu từ những file đơn giản nhất, không có logic AI.
+Bắt đầu từ những file đơn giản nhất, không có logic AI
 
 ## 1.1 — `load-env.ts` (10 dòng)
 

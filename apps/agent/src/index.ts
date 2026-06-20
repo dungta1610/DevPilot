@@ -1,10 +1,10 @@
-import './load-env';
 import * as restate from '@restatedev/restate-sdk';
 import { config } from './config';
 import { startHealthServer } from './health';
-import { reviewWorkflow } from './restate/review-workflow';
-import { projectAssistant } from './restate/project-assistant';
+import './load-env';
 import { digestAgent } from './restate/digest-agent';
+import { projectAssistant } from './restate/project-assistant';
+import { reviewWorkflow } from './restate/review-workflow';
 
 /**
  * Boots the Restate SDK HTTP server and registers the durable handlers. Restate
@@ -17,14 +17,10 @@ import { digestAgent } from './restate/digest-agent';
 restate
   .endpoint()
   .bind(reviewWorkflow)
-  .bind(projectAssistant)
   .bind(digestAgent)
+  .bind(projectAssistant)
   .listen(config.agentPort)
   .then((port) => {
-    console.log(`DevPilot agent (Restate + LangGraph) listening on :${port}`);
+    console.log(`agent listening on :${port}`);
     startHealthServer();
-  })
-  .catch((err: unknown) => {
-    console.error('Failed to start agent endpoint:', err);
-    process.exit(1);
   });
