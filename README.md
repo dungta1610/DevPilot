@@ -2,7 +2,7 @@
 
 # PHẦN 0 — Bức tranh tổng thể
 
-Trước khi đọc bất kỳ dòng code nào, cần hiểu **service này làm gì**.
+Trước khi đọc bất kỳ dòng code nào, cần hiểu **service này làm gì**
 
 Đây là một HTTP server. Nó không phải web server thông thường — nó là một
 **Restate service**. Nghĩa là: Restate server (chạy riêng) gọi vào nó, và nó
